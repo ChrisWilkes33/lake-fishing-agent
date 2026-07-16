@@ -320,11 +320,11 @@
 
     const dot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
-    const reports = data.new_reports || [];
+    const reports = data.all_reports || [];
 
     if (reports.length > 0) {
       dot.className = 'status-dot';
-      statusText.textContent = `${reports.length} new report${reports.length > 1 ? 's' : ''} found`;
+      statusText.textContent = `${reports.length} report${reports.length > 1 ? "s" : ""} on file`;
     } else {
       dot.className = 'status-dot nothing';
       statusText.textContent = 'No new reports since last check';
@@ -347,6 +347,7 @@
 
     for (const r of reports) {
       // Clean up the date_info label for display
+      const addedAt = r.added_at ? ` · found ${r.added_at}` : "";
       const dateLabel = r.date_info
         ? r.date_info.replace('undated: will check fingerprint', 'undated')
                      .replace('dated: ', '')

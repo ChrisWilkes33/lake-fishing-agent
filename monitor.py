@@ -583,19 +583,61 @@ def run_monitor(test_mode: bool = False):
     # ── Write results to JSON endpoint ──
     # Served at wilkeslandia.com/fishing-agent/reports.json
     # This will be the data source for the future Android app.
+    #
+    # We ACCUMULATE reports rather than replace them. Each run merges
+    # new findings into the existing list and drops anything older than
+    # REPORT_RETENTION_DAYS. This way the page stays populated for weeks
+    # rather than going blank every time the agent finds nothing new.
+
+    REPORT_RETENTION_DAYS = 14   # keep reports on the page for two weeks
+    WEB_OUTPUT = "/var/www/fishing-agent/reports.json"
+
+    # Load existing reports from the JSON file (if it exists)
+    existing_reports = []
+    try:
+        with open(WEB_OUTPUT, "r") as f:
+            existing_data = json.load(f)
+            existing_reports = existing_data.get("all_reports", [])
+    except (FileNotFoundError, json.JSONDecodeError):
+        pass   # first run or corrupt file — start fresh
+
+    # Tag each new report with the current timestamp so we can age them out later
+    now_str_full = datetime.now().strftime("%Y-%m-%d %H:%M")
+    for r in new_reports:
+        r["added_at"] = now_str_full
+
+    # Merge: add new reports, then drop any older than REPORT_RETENTION_DAYS.
+    # Use fingerprint to avoid duplicates if the same report shows up again.
+    existing_fps = {r.get("fingerprint") for r in existing_reports}
+    truly_new = [r for r in new_reports if r.get("fingerprint") not in existing_fps]
+    merged = existing_reports + truly_new
+
+    cutoff = datetime.now() - timedelta(days=REPORT_RETENTION_DAYS)
+    def report_age_ok(r):
+        added = r.get("added_at", "")
+        try:
+            return datetime.strptime(added, "%Y-%m-%d %H:%M") >= cutoff
+        except ValueError:
+            return True   # keep if we can't parse the date
+
+    merged = [r for r in merged if report_age_ok(r)]
+
+    # Sort newest-first for display
+    merged.sort(key=lambda r: r.get("added_at", ""), reverse=True)
+
     output = {
         "lake": lake_name,
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-        "new_reports": new_reports,
-        "report_count": len(new_reports),
-        "status": "new_reports" if new_reports else "nothing_new"
+        "generated_at": now_str_full,
+        "all_reports": merged,
+        "report_count": len(merged),
+        "status": "has_reports" if merged else "nothing_new"
     }
 
-    WEB_OUTPUT = "/var/www/fishing-agent/reports.json"
     try:
         with open(WEB_OUTPUT, "w") as f:
             json.dump(output, f, indent=2)
         print(f"\n✅ Results written to {WEB_OUTPUT}")
+        print(f"   Total reports on page: {len(merged)} ({len(truly_new)} new this run)")
         print(f"   Live at: https://wilkeslandia.com/fishing-agent/reports.json")
     except Exception as e:
         print(f"\n❌ Could not write to {WEB_OUTPUT}: {e}")
