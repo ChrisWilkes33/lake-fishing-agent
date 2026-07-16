@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Fish Warden — Lake Buchanan</title>
+  <style>
+    /* ─── Palette ───────────────────────────────────────────
+       Deep water navy, sunrise amber, fog white, creek green
+       Typography: Playfair Display (editorial display) +
+                   IBM Plex Mono (data/conditions readout)
+    ──────────────────────────────────────────────────────── */
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;1,400&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap');
+
+    :root {
+      --navy:      #0d1f2d;
+      --deep:      #162535;
+      --amber:     #e8a030;
+      --amber-dim: #a06a18;
+      --fog:       #f0ece4;
+      --fog-mid:   #d8d2c6;
+      --creek:     #2a7a5a;
+      --creek-dim: #1d5440;
+      --muted:     #6b7a88;
+      --rule:      rgba(255,255,255,0.08);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--navy);
+      color: var(--fog);
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ─── Header ─────────────────────────────────────────── */
+    header {
+      border-bottom: 1px solid var(--rule);
+      padding: 2rem 2rem 1.5rem;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .wordmark {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--fog);
+      line-height: 1;
+    }
+
+    .wordmark span {
+      color: var(--amber);
+    }
+
+    .lake-label {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 0.3rem;
+    }
+
+    .last-run {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      color: var(--muted);
+      text-align: right;
+    }
+
+    .last-run strong {
+      display: block;
+      color: var(--fog-mid);
+      font-size: 0.8rem;
+    }
+
+    /* ─── Status bar ─────────────────────────────────────── */
+    .status-bar {
+      padding: 0.75rem 2rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--creek);
+      box-shadow: 0 0 8px var(--creek);
+      animation: pulse 2.5s ease-in-out infinite;
+      flex-shrink: 0;
+    }
+
+    .status-dot.nothing { background: var(--muted); box-shadow: none; animation: none; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    /* ─── Main layout ────────────────────────────────────── */
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2.5rem 2rem;
+    }
+
+    /* ─── Loading / Error states ─────────────────────────── */
+    .state-msg {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.85rem;
+      color: var(--muted);
+      padding: 4rem 0;
+      text-align: center;
+    }
+
+    /* ─── Nothing new state ──────────────────────────────── */
+    .nothing-new {
+      text-align: center;
+      padding: 5rem 2rem;
+      border: 1px solid var(--rule);
+      border-radius: 4px;
+    }
+
+    .nothing-new .icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      opacity: 0.4;
+    }
+
+    .nothing-new h2 {
+      font-family: 'Playfair Display', Georgia, serif;
+      font-size: 1.4rem;
+      font-weight: 700;
+      color: var(--fog-mid);
+      margin-bottom: 0.5rem;
+    }
+
+    .nothing-new p {
+      color: var(--muted);
+      font-size: 0.875rem;
+    }
+
+    /* ─── Report cards ───────────────────────────────────── */
+    .reports-header {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--amber-dim);
+      margin-bottom: 1.5rem;
+    }
+
+    .report-card {
+      background: var(--deep);
+      border: 1px solid var(--rule);
+      border-left: 3px solid var(--creek);
+      border-radius: 4px;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+      transition: border-left-color 0.15s;
+    }
+
+    .report-card:hover {
+      border-left-color: var(--amber);
+    }
+
+    .report-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .report-source {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+      color: var(--amber);
+      text-transform: uppercase;
+    }
+
+    .report-date {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .report-summary {
+      font-size: 0.925rem;
+      line-height: 1.7;
+      color: var(--fog);
+    }
+
+    .report-link {
+      display: inline-block;
+      margin-top: 1rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--creek);
+      text-decoration: none;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid transparent;
+      transition: border-color 0.15s, color 0.15s;
+    }
+
+    .report-link:hover {
+      color: var(--fog);
+      border-bottom-color: var(--fog-mid);
+    }
+
+    /* ─── Footer ─────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--rule);
+      padding: 1.5rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+
+    .footer-note {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+    }
+
+    .refresh-btn {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.68rem;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--rule);
+      border-radius: 3px;
+      padding: 0.35rem 0.75rem;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+
+    .refresh-btn:hover {
+      color: var(--fog);
+      border-color: var(--fog-mid);
+    }
+
+    @media (max-width: 600px) {
+      header { padding: 1.25rem; }
+      main { padding: 1.5rem 1.25rem; }
+      .wordmark { font-size: 1.5rem; }
+      footer { padding: 1rem 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <div class="wordmark">Fish<span>Warden</span></div>
+    <div class="lake-label" id="lake-label">Loading...</div>
+  </div>
+  <div class="last-run">
+    <strong id="run-time">—</strong>
+    last checked
+  </div>
+</header>
+
+<div class="status-bar" id="status-bar">
+  <div class="status-dot nothing" id="status-dot"></div>
+  <span id="status-text">Fetching reports...</span>
+</div>
+
+<main id="main">
+  <div class="state-msg">Loading...</div>
+</main>
+
+<footer>
+  <div class="footer-note">wilkeslandia.com / fishing-agent</div>
+  <button class="refresh-btn" onclick="loadReports()">↻ Refresh</button>
+</footer>
+
+<script>
+  // Fetch reports.json from the same server and render the page.
+  // The JSON lives at /fishing-agent/reports.json on wilkeslandia.com.
+
+  async function loadReports() {
+    const main = document.getElementById('main');
+    main.innerHTML = '<div class="state-msg">Loading...</div>';
+
+    try {
+      // Bust cache so we always get the latest file
+      const res = await fetch('/fishing-agent/reports.json?t=' + Date.now());
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      render(data);
+    } catch (err) {
+      main.innerHTML = `<div class="state-msg">Could not load reports.json<br><small>${err.message}</small></div>`;
+      document.getElementById('status-text').textContent = 'Error loading data';
+    }
+  }
+
+  function render(data) {
+    // Update header metadata
+    document.getElementById('lake-label').textContent = data.lake || 'Lake Buchanan';
+    document.getElementById('run-time').textContent = data.generated_at || '—';
+
+    const dot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const reports = data.new_reports || [];
+
+    if (reports.length > 0) {
+      dot.className = 'status-dot';
+      statusText.textContent = `${reports.length} new report${reports.length > 1 ? 's' : ''} found`;
+    } else {
+      dot.className = 'status-dot nothing';
+      statusText.textContent = 'No new reports since last check';
+    }
+
+    const main = document.getElementById('main');
+
+    if (reports.length === 0) {
+      main.innerHTML = `
+        <div class="nothing-new">
+          <div class="icon">🎣</div>
+          <h2>Nothing new on the water</h2>
+          <p>Agent checked all sources. No reports posted in the last 7 days.</p>
+        </div>`;
+      return;
+    }
+
+    // Build report cards
+    let html = `<div class="reports-header">${reports.length} Report${reports.length > 1 ? 's' : ''} — ${data.generated_at}</div>`;
+
+    for (const r of reports) {
+      // Clean up the date_info label for display
+      const dateLabel = r.date_info
+        ? r.date_info.replace('undated: will check fingerprint', 'undated')
+                     .replace('dated: ', '')
+        : '';
+
+      html += `
+        <div class="report-card">
+          <div class="report-meta">
+            <div class="report-source">${escHtml(r.source)}</div>
+            ${dateLabel ? `<div class="report-date">${escHtml(dateLabel)}</div>` : ''}
+          </div>
+          <div class="report-summary">${escHtml(r.summary)}</div>
+          ${r.url ? `<a class="report-link" href="${escHtml(r.url)}" target="_blank" rel="noopener">View source →</a>` : ''}
+        </div>`;
+    }
+
+    main.innerHTML = html;
+  }
+
+  function escHtml(str) {
+    // Prevent XSS by escaping HTML special characters
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // Load on page open
+  loadReports();
+</script>
+
+</body>
+</html>

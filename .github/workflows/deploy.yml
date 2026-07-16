@@ -1,21 +1,15 @@
-# deploy.yml — Auto-deploy to Nanode on every push to main
+# deploy.yml — Auto-deploy to Nanode on every push to master
 #
-# HOW IT WORKS:
-#   1. You push code to GitHub
-#   2. This workflow SSHs into your Nanode as the 'fishing-agent' user
-#   3. It pulls the latest code and restarts nothing (no server process to restart)
-#   4. Done — your Nanode always has the latest code
-#
-# SECRETS REQUIRED (set these in GitHub → repo → Settings → Secrets → Actions):
-#   NANODE_HOST        — your Nanode's IP address or domain (e.g. wilkeslandia.com)
-#   NANODE_SSH_KEY     — the PRIVATE half of an SSH key pair (see README for setup)
+# SECRETS REQUIRED (GitHub → repo → Settings → Secrets → Actions):
+#   NANODE_HOST    — your Nanode IP or wilkeslandia.com
+#   NANODE_SSH_KEY — private SSH key for the fishingagent user
 
 name: Deploy to Nanode
 
 on:
   push:
     branches:
-      - master    # triggers on every push to master
+      - master
 
 jobs:
   deploy:
@@ -32,4 +26,8 @@ jobs:
             cd /opt/fishing-agent
             git pull origin master
             /opt/fishing-agent/venv/bin/pip install -r requirements.txt --quiet
+
+            # Copy the HTML display page to the web root so nginx serves it
+            cp /opt/fishing-agent/sites/fish-warden/index.html /var/www/fishing-agent/index.html
+
             echo "Deploy complete: $(date)"

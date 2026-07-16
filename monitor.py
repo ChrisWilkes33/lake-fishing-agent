@@ -552,17 +552,25 @@ def run_monitor(test_mode: bool = False):
             messages=[{
                 "role": "user",
                 "content": (
-                    f"Summarize this fishing report from '{raw['source']}' in 3-5 sentences "
-                    f"for an experienced angler. Focus on: depth fish are holding, "
-                    f"location on the lake or structure type, species and what they're biting, "
-                    f"and overall conditions. Use angler shorthand. Be concise.\n\n"
-                    f"Report:\n{content[:3000]}"
+                    f"You are summarizing scraped web content for an experienced angler. "
+                    f"Even if the content is a website description or partial page, extract whatever "
+                    f"fishing-relevant information is present and summarize it in 2-4 sentences. "
+                    f"Focus on: depth, structure, species, what they're biting, conditions. "
+                    f"Use angler shorthand. If there is genuinely no fishing information at all, "
+                    f"respond with exactly: NO_REPORT\n\n"
+                    f"Source: {raw['source']}\n"
+                    f"Content:\n{content[:3000]}"
                 )
             }]
         )
         summarization_input_tokens += summary_response.usage.input_tokens
         summarization_output_tokens += summary_response.usage.output_tokens
         summary = summary_response.content[0].text.strip()
+
+        # If the AI found nothing useful on the page, skip it
+        if summary == "NO_REPORT":
+            print(f"  ⏭️  Skipping '{raw['source']}' — no fishing content found")
+            continue
 
         new_reports.append({
             "source": raw["source"],
