@@ -29,11 +29,7 @@ jobs:
           username: fishingagent
           key: ${{ secrets.NANODE_SSH_KEY }}
           script: |
-            # Pull latest code
             cd /opt/fishing-agent
             git pull origin master
-
-            # Install any new dependencies quietly
-            pip install -r requirements.txt --quiet
-
+            /opt/fishing-agent/venv/bin/pip install -r requirements.txt --quiet
             echo "Deploy complete: $(date)"
