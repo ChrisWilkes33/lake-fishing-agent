@@ -2,7 +2,7 @@
 #
 # HOW IT WORKS:
 #   1. You push code to GitHub
-#   2. This workflow SSHs into your Nanode as the 'fishwarden' user
+#   2. This workflow SSHs into your Nanode as the 'fishing-agent' user
 #   3. It pulls the latest code and restarts nothing (no server process to restart)
 #   4. Done — your Nanode always has the latest code
 #
@@ -26,11 +26,11 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.NANODE_HOST }}
-          username: fishwarden
+          username: fishingagent
           key: ${{ secrets.NANODE_SSH_KEY }}
           script: |
             # Pull latest code
-            cd /home/fishwarden/lake-fishing-agent
+            cd /opt/fishing-agent
             git pull origin master
 
             # Install any new dependencies quietly
