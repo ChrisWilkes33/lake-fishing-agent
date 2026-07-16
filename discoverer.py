@@ -86,42 +86,50 @@ def scrape_page(url: str) -> str:
 
 # ─────────────────────────────────────────────
 # TOOL: search_web
-# Scrapes DuckDuckGo HTML results — free, no API key needed.
-# Returns top 5 results to keep token count low.
+# Uses SerpAPI to get real Google search results.
+# Requires SERPAPI_KEY in .env — free tier is 100 searches/month,
+# which is plenty since the discoverer only does 4 searches per run.
 # ─────────────────────────────────────────────
 
 def search_web(query: str) -> str:
-    headers = {
-        "User-Agent": (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/120.0.0.0 Safari/537.36"
-        )
-    }
+    api_key = os.environ.get("SERPAPI_KEY")
+    if not api_key:
+        return "ERROR: SERPAPI_KEY not set in .env"
+
     try:
-        response = requests.post(
-            "https://html.duckduckgo.com/html/",
-            data={"q": query},
-            headers=headers,
+        # SerpAPI's Google search endpoint
+        # num=5 keeps token count low — top 5 results is enough signal
+        response = requests.get(
+            "https://serpapi.com/search",
+            params={
+                "q": query,
+                "api_key": api_key,
+                "engine": "google",
+                "num": 5,
+                "gl": "us",   # country: US
+                "hl": "en",   # language: English
+            },
             timeout=10
         )
         response.raise_for_status()
+        data = response.json()
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        # SerpAPI returns results in data["organic_results"]
+        # Each result has: title, link, snippet
+        organic = data.get("organic_results", [])
+        if not organic:
+            return "No results found."
+
         results = []
-
-        for div in soup.find_all("div", class_="result")[:5]:
-            title_tag = div.find("a", class_="result__a")
-            snippet_tag = div.find("a", class_="result__snippet")
-            if title_tag:
-                results.append(
-                    f"Title: {title_tag.get_text(strip=True)}\n"
-                    f"URL: {title_tag.get('href', '')}\n"
-                    f"Snippet: {snippet_tag.get_text(strip=True) if snippet_tag else 'No description'}"
-                )
+        for r in organic[:5]:
+            results.append(
+                f"Title: {r.get('title', 'No title')}\n"
+                f"URL: {r.get('link', '')}\n"
+                f"Snippet: {r.get('snippet', 'No description')}"
+            )
 
         time.sleep(REQUEST_DELAY)
-        return "\n\n---\n\n".join(results) if results else "No results found."
+        return "\n\n---\n\n".join(results)
 
     except requests.exceptions.RequestException as e:
         return f"ERROR: Search failed — {str(e)}"
