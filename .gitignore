@@ -1,0 +1,15 @@
+# Never commit secrets or state files
+.env
+
+# State files — these live on the server, not in the repo
+discovered_sources.json
+sent_reports.json
+raw_output.txt
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Mac junk
+.DS_Store
