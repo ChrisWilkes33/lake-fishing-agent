@@ -156,23 +156,21 @@ def extract_date(text: str) -> datetime | None:
 
 def is_recent(text: str) -> tuple[bool, str]:
     """
-    Determines if a report is recent enough to send.
+    Extracts the date from a report for display purposes only.
+    We no longer skip reports based on age — a weekly report is always
+    going to be 7+ days old by the time we check it. Deduplication via
+    fingerprinting handles the "don't resend" logic instead.
 
     Returns:
-        (True, "dated: 2024-01-15") if dated and within MAX_REPORT_AGE_DAYS
-        (True, "undated: new fingerprint") if no date but not seen before
-        (False, reason) if it should be skipped
+        (True, "dated: 2024-01-15 (31 days ago)") if a date was found
+        (True, "undated") if no date found
     """
     date = extract_date(text)
     if date:
         age_days = (datetime.now() - date).days
-        if age_days <= MAX_REPORT_AGE_DAYS:
-            return True, f"dated: {date.strftime('%Y-%m-%d')} ({age_days} days ago)"
-        else:
-            return False, f"dated but too old: {date.strftime('%Y-%m-%d')} ({age_days} days ago)"
+        return True, f"dated: {date.strftime('%Y-%m-%d')} ({age_days} days ago)"
     else:
-        # No date found — we'll let the fingerprint check handle deduplication
-        return True, "undated: will check fingerprint"
+        return True, "undated"
 
 
 # ─────────────────────────────────────────────
@@ -199,8 +197,8 @@ def scrape_page(url: str) -> str:
         text = soup.get_text(separator="\n")
         text = re.sub(r"\n{3,}", "\n\n", text).strip()
 
-        if len(text) > 4000:
-            text = text[:4000] + "\n\n[...truncated...]"
+        if len(text) > 6000:
+            text = text[:6000] + "\n\n[...truncated...]"
 
         time.sleep(REQUEST_DELAY)
         return text
