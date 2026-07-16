@@ -1,144 +1,185 @@
-# 🎣 Lake Fishing Agent
+# 🎣 Lake Fishing Agent (Fish Warden)
 
-An AI agent that monitors fishing reports for Lake Buchanan (or any lake) and sends a nightly email digest with summaries written in angler shorthand.
-
-## How it works
-
-**Agent 1 — Discoverer** (`discoverer.py`)
-Run this once per lake. It searches for fishing guides and report sources, scrapes their sites, and saves everything to `discovered_sources.json`.
-
-**Agent 2 — Monitor** (`monitor.py`)
-Runs nightly via cron. Reads `discovered_sources.json`, visits every source, finds new reports, deduplicates them, summarizes each one, and sends one email. Tracks everything it's sent in `sent_reports.json` so you never get duplicates.
+An AI agent that monitors fishing reports for Lake Buchanan and sends a nightly email digest with summaries written in angler shorthand. Also serves reports as JSON at `wilkeslandia.com/fish-warden/reports.json` for the future Android app.
 
 ---
 
-## Deployment on your Nanode (Linux)
+## One-time server setup (do this once on your Nanode)
 
-### 1. Clone the repo
+### 1. Create the fishwarden user
+
+Running agents as root is a security risk. We use a dedicated low-privilege user instead.
 
 ```bash
+# SSH into your Nanode as root first
+adduser fishwarden --disabled-password --gecos ""
+```
+
+### 2. Create the web output directory
+
+The agent writes `reports.json` here so nginx can serve it.
+
+```bash
+mkdir -p /var/www/fish-warden
+chown fishwarden:fishwarden /var/www/fish-warden
+```
+
+### 3. Generate an SSH key for GitHub Actions
+
+This key lets GitHub Actions SSH in as fishwarden to deploy code.
+
+```bash
+# Run this as root on your Nanode
+su - fishwarden
+ssh-keygen -t ed25519 -f ~/.ssh/github_actions -N "" -C "github-actions"
+cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+cat ~/.ssh/github_actions   # copy this — you'll need it in step 6
+exit  # back to root
+```
+
+### 4. Clone the repo as fishwarden
+
+```bash
+su - fishwarden
 git clone https://github.com/ChrisWilkes33/lake-fishing-agent.git
 cd lake-fishing-agent
-```
-
-### 2. Install dependencies
-
-```bash
 pip install -r requirements.txt
-```
-
-### 3. Set up your environment variables
-
-```bash
 cp .env.example .env
-nano .env
-```
-
-Fill in:
-- `ANTHROPIC_API_KEY` — from [console.anthropic.com](https://console.anthropic.com)
-- `GMAIL_ADDRESS` — the Gmail account sending the alerts
-- `GMAIL_APP_PASSWORD` — **not your Gmail password** — see below
-- `ALERT_EMAIL` — where to send the reports (can be same as above)
-
-### 4. Set up Gmail App Password
-
-Gmail requires an App Password for SMTP access (not your regular password).
-
-1. Go to [myaccount.google.com](https://myaccount.google.com)
-2. Search for "App Passwords" in the search bar
-3. Create a new App Password — name it "fishing agent"
-4. Copy the 16-character password into `GMAIL_APP_PASSWORD` in your `.env`
-
-> Note: App Passwords require 2-Step Verification to be enabled on your Google account.
-
-### 5. Create the logs directory
-
-```bash
+nano .env   # fill in your values
 mkdir -p logs
+exit  # back to root
 ```
 
-### 6. Run the Discoverer (one time per lake)
+### 5. Set up cron as fishwarden (midnight daily)
 
 ```bash
+crontab -u fishwarden -e
+```
+
+Add this line:
+```
+0 0 * * * cd /home/fishwarden/lake-fishing-agent && python monitor.py >> logs/monitor.log 2>&1
+```
+
+To switch to Thursdays only after evaluating cost:
+```
+0 0 * * 4 cd /home/fishwarden/lake-fishing-agent && python monitor.py >> logs/monitor.log 2>&1
+```
+
+### 6. Add GitHub Actions secrets
+
+Go to: github.com/ChrisWilkes33/lake-fishing-agent → Settings → Secrets and variables → Actions
+
+Add two secrets:
+- `NANODE_HOST` — your Nanode IP or `wilkeslandia.com`
+- `NANODE_SSH_KEY` — the private key you copied in step 3 (the whole thing including the `-----BEGIN` and `-----END` lines)
+
+### 7. Update nginx to serve fish-warden reports
+
+Add this block to your nginx config in the wilkeslandia repo (`nginx/wilkeslandia.conf`), inside the main server block:
+
+```nginx
+# Fish Warden — fishing report JSON for Android app
+location /fish-warden/ {
+    alias /var/www/fish-warden/;
+    add_header Access-Control-Allow-Origin "*";
+    add_header Cache-Control "no-cache";
+}
+```
+
+Then deploy the wilkeslandia repo to pick up the nginx change, or manually:
+```bash
+nginx -t && systemctl reload nginx
+```
+
+---
+
+## Running the agent
+
+### First run — build your source list
+
+```bash
+su - fishwarden
+cd lake-fishing-agent
 python discoverer.py
 ```
 
-This runs the AI research agent and produces `discovered_sources.json`. Takes 2-5 minutes. Check the output — if it found fewer than 5 sources, run it again.
-
-To run for a different lake:
+To discover sources for a different lake:
 ```bash
 python discoverer.py --lake "Lake Travis Texas"
 ```
 
-### 7. Test the Monitor
+### Test the monitor (before cron takes over)
 
 ```bash
 python monitor.py --test
 ```
 
-This runs the full monitor, sends a real email to your `ALERT_EMAIL`, and prints a detailed cost breakdown. Check your inbox and review the cost estimate before setting up cron.
+This runs the full monitor, sends a real email, writes real state, and prints a detailed cost breakdown so you can decide on daily vs weekly schedule.
 
-### 8. Set up cron (midnight daily)
+### Normal run (what cron does)
 
 ```bash
-crontab -e
+python monitor.py
 ```
 
-Add this line (update the path to match where you cloned the repo):
+---
 
-```
-0 0 * * * cd /root/lake-fishing-agent && python monitor.py >> logs/monitor.log 2>&1
-```
+## After setup — ongoing workflow
 
-To switch to Thursdays only (once you've evaluated cost):
-```
-0 0 * * 4 cd /root/lake-fishing-agent && python monitor.py >> logs/monitor.log 2>&1
-```
+Once deployed, you never touch the Nanode again for code changes:
+
+1. Edit code locally or here in Claude
+2. Push to GitHub
+3. GitHub Actions SSHs in and pulls automatically
+4. Done
 
 ---
 
 ## File reference
 
-| File | Purpose |
-|------|---------|
-| `discoverer.py` | Agent 1 — finds sources, run manually |
-| `monitor.py` | Agent 2 — checks sources nightly, run by cron |
-| `discovered_sources.json` | Output of discoverer, input to monitor |
-| `sent_reports.json` | Deduplication tracker — never delete this |
-| `logs/monitor.log` | Appended each cron run |
-| `.env` | Your secrets — never commit this |
+| File | Location on Nanode | Purpose |
+|------|--------------------|---------|
+| `discoverer.py` | `/home/fishwarden/lake-fishing-agent/` | Agent 1 — run manually |
+| `monitor.py` | `/home/fishwarden/lake-fishing-agent/` | Agent 2 — run by cron |
+| `.env` | `/home/fishwarden/lake-fishing-agent/` | Your secrets — never in git |
+| `discovered_sources.json` | `/home/fishwarden/lake-fishing-agent/` | Source list from discoverer |
+| `sent_reports.json` | `/home/fishwarden/lake-fishing-agent/` | Dedup tracker — never delete |
+| `reports.json` | `/var/www/fish-warden/` | Served publicly for Android app |
+| `logs/monitor.log` | `/home/fishwarden/lake-fishing-agent/` | Cron run history |
 
 ---
 
 ## Cost estimates
 
-Both agents use Claude Haiku (cheapest model, ~10x less than Sonnet).
+Both agents use Claude Haiku (cheapest model).
 
 | Schedule | Estimated cost |
 |----------|---------------|
 | Daily | ~$2-5/month |
 | Weekly (Thursdays) | ~$0.25-1/month |
 
-Run `python monitor.py --test` to see the exact cost for your setup before committing to a schedule.
+Run `python monitor.py --test` to see the exact cost for your source list.
 
 ---
 
 ## Troubleshooting
 
+**GitHub Actions deploy fails**
+- Check the Actions tab in GitHub for the error
+- Make sure `NANODE_HOST` and `NANODE_SSH_KEY` secrets are set correctly
+- Verify the fishwarden user exists: `id fishwarden` on the Nanode
+
 **Email not sending**
-- Make sure you're using an App Password, not your regular Gmail password
-- Make sure 2-Step Verification is enabled on your Google account
-- Check that `GMAIL_ADDRESS`, `GMAIL_APP_PASSWORD`, and `ALERT_EMAIL` are all set in `.env`
+- Use a Gmail App Password, not your regular password
+- Requires 2-Step Verification on the Gmail account
+- Generate at: myaccount.google.com/apppasswords
 
 **Agent finds no reports**
-- DuckDuckGo occasionally blocks scraping — wait an hour and try again
+- DuckDuckGo occasionally blocks scrapers — wait an hour and retry
 - Re-run `discoverer.py` to refresh the source list
 
-**Cron not running**
-- Check `logs/monitor.log` for errors
-- Make sure the path in the cron line is correct: `cd /path/to/lake-fishing-agent`
-- Test the cron command manually first by copy-pasting it into your terminal
-
-**Too many duplicate reports**
-- Don't delete `sent_reports.json` — that's what prevents duplicates
-- If you want to reset and resend everything, delete `sent_reports.json` and run again
+**reports.json not accessible at wilkeslandia.com/fish-warden/**
+- Check the nginx block was added and nginx was reloaded
+- Verify `/var/www/fish-warden/` is owned by fishwarden: `ls -la /var/www/fish-warden/`

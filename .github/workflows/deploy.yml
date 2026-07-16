@@ -1,0 +1,39 @@
+# deploy.yml — Auto-deploy to Nanode on every push to main
+#
+# HOW IT WORKS:
+#   1. You push code to GitHub
+#   2. This workflow SSHs into your Nanode as the 'fishwarden' user
+#   3. It pulls the latest code and restarts nothing (no server process to restart)
+#   4. Done — your Nanode always has the latest code
+#
+# SECRETS REQUIRED (set these in GitHub → repo → Settings → Secrets → Actions):
+#   NANODE_HOST        — your Nanode's IP address or domain (e.g. wilkeslandia.com)
+#   NANODE_SSH_KEY     — the PRIVATE half of an SSH key pair (see README for setup)
+
+name: Deploy to Nanode
+
+on:
+  push:
+    branches:
+      - master    # triggers on every push to master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy to Nanode via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.NANODE_HOST }}
+          username: fishwarden
+          key: ${{ secrets.NANODE_SSH_KEY }}
+          script: |
+            # Pull latest code
+            cd /home/fishwarden/lake-fishing-agent
+            git pull origin master
+
+            # Install any new dependencies quietly
+            pip install -r requirements.txt --quiet
+
+            echo "Deploy complete: $(date)"
