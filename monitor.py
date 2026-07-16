@@ -623,12 +623,75 @@ def run_monitor(test_mode: bool = False):
     # Sort newest-first for display
     merged.sort(key=lambda r: r.get("added_at", ""), reverse=True)
 
+    # ── Synthesis: consensus summary + species predictions ──
+    # One bounded AI call that reads all accumulated report summaries and produces:
+    #   1. A consensus/contradiction summary across all sources
+    #   2. One paragraph per target species with specific advice
+    # We only regenerate this if there are reports to work with.
+    synthesis = None
+    synthesis_input_tokens = 0
+    synthesis_output_tokens = 0
+
+    if merged:
+        # Build a digest of all report summaries to feed to the synthesizer
+        report_digest = "\n\n".join(
+            f"Source: {r['source']}\nDate: {r.get('date_info', 'unknown')}\nSummary: {r['summary']}"
+            for r in merged
+        )
+
+        print("\n🧠 Generating synthesis and species predictions...")
+        synth_response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=1200,
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"You are an experienced fishing guide on {lake_name}. "
+                    f"Below are recent fishing reports from multiple sources. "
+                    f"Write a synthesis for a fellow experienced angler.\n\n"
+                    f"REPORTS:\n{report_digest}\n\n"
+                    f"Write the following sections. Be direct, specific, and use angler shorthand. "
+                    f"No fluff, no hedging. Write like you're texting a fishing buddy.\n\n"
+                    f"SECTION 1 — CONSENSUS & CONTRADICTIONS (2-4 sentences): "
+                    f"What do the reports agree on? Where do they contradict each other? "
+                    f"Call out specific disagreements if they exist (e.g. one source says shallow, another says deep).\n\n"
+                    f"SECTION 2 — SPECIES PREDICTIONS: Write one paragraph for each of these species. "
+                    f"Base it on the reports. If a species isn't mentioned, make a reasonable inference "
+                    f"from the conditions described (water temp, depth, season, structure). "
+                    f"Each paragraph should include: where to find them, what depth, what structure, "
+                    f"what to throw, and best time of day if known.\n"
+                    f"- Crappie\n"
+                    f"- Striped Bass\n"
+                    f"- White Bass\n"
+                    f"- Largemouth Bass\n"
+                    f"- Catfish\n\n"
+                    f"Return your response as JSON with this exact structure:\n"
+                    f'{{ "consensus": "...", "species": {{ "crappie": "...", "striper": "...", "white_bass": "...", "largemouth": "...", "catfish": "..." }} }}'
+                )
+            }]
+        )
+        synthesis_input_tokens = synth_response.usage.input_tokens
+        synthesis_output_tokens = synth_response.usage.output_tokens
+
+        # Parse the JSON out of the response
+        synth_text = synth_response.content[0].text.strip()
+        synth_match = re.search(r'\{[\s\S]*\}', synth_text)
+        if synth_match:
+            try:
+                synthesis = json.loads(synth_match.group())
+                print(f"  ✅ Synthesis complete ({synthesis_input_tokens} in / {synthesis_output_tokens} out tokens)")
+            except json.JSONDecodeError:
+                print("  ⚠️  Could not parse synthesis JSON — skipping")
+        else:
+            print("  ⚠️  No JSON found in synthesis response — skipping")
+
     output = {
         "lake": lake_name,
         "generated_at": now_str_full,
         "all_reports": merged,
         "report_count": len(merged),
-        "status": "has_reports" if merged else "nothing_new"
+        "status": "has_reports" if merged else "nothing_new",
+        "synthesis": synthesis   # None if no reports, dict if synthesis succeeded
     }
 
     try:

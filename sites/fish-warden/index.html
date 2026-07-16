@@ -258,6 +258,62 @@
       border-color: var(--fog-mid);
     }
 
+    /* ─── Synthesis section ─────────────────────────────── */
+    .synthesis {
+      margin-bottom: 2.5rem;
+      border: 1px solid var(--rule);
+      border-top: 3px solid var(--amber);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .synthesis-header {
+      background: var(--deep);
+      padding: 1rem 1.5rem;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--amber);
+    }
+
+    .consensus {
+      padding: 1.25rem 1.5rem;
+      font-size: 0.925rem;
+      line-height: 1.7;
+      color: var(--fog);
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .species-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 0;
+    }
+
+    .species-card {
+      padding: 1.25rem 1.5rem;
+      border-right: 1px solid var(--rule);
+      border-bottom: 1px solid var(--rule);
+    }
+
+    .species-card:last-child { border-right: none; }
+
+    .species-name {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--creek);
+      margin-bottom: 0.6rem;
+    }
+
+    .species-text {
+      font-size: 0.875rem;
+      line-height: 1.65;
+      color: var(--fog-mid);
+    }
+
     @media (max-width: 600px) {
       header { padding: 1.25rem; }
       main { padding: 1.5rem 1.25rem; }
@@ -337,13 +393,45 @@
         <div class="nothing-new">
           <div class="icon">🎣</div>
           <h2>Nothing new on the water</h2>
-          <p>Agent checked all sources. No reports posted in the last 7 days.</p>
+          <p>Agent checked all sources. No reports in the last 14 days.</p>
         </div>`;
       return;
     }
 
+    let html = "";
+
+    // ── Synthesis block ──
+    const syn = data.synthesis;
+    if (syn) {
+      const speciesMap = {
+        crappie:    "Crappie",
+        striper:    "Striped Bass",
+        white_bass: "White Bass",
+        largemouth: "Largemouth Bass",
+        catfish:    "Catfish"
+      };
+
+      let speciesCards = "";
+      for (const [key, label] of Object.entries(speciesMap)) {
+        if (syn.species && syn.species[key]) {
+          speciesCards += `
+            <div class="species-card">
+              <div class="species-name">${label}</div>
+              <div class="species-text">${escHtml(syn.species[key])}</div>
+            </div>`;
+        }
+      }
+
+      html += `
+        <div class="synthesis">
+          <div class="synthesis-header">🧠 Agent Analysis — based on ${reports.length} report${reports.length > 1 ? 's' : ''}</div>
+          <div class="consensus">${escHtml(syn.consensus)}</div>
+          <div class="species-grid">${speciesCards}</div>
+        </div>`;
+    }
+
     // Build report cards
-    let html = `<div class="reports-header">${reports.length} Report${reports.length > 1 ? 's' : ''} — ${data.generated_at}</div>`;
+    html += `<div class="reports-header">${reports.length} Report${reports.length > 1 ? 's' : ''} — ${data.generated_at}</div>`;
 
     for (const r of reports) {
       // Clean up the date_info label for display
