@@ -297,8 +297,8 @@ def run_discoverer(lake_name: str):
         print(f"\n--- Iteration {iteration}/{MAX_ITERATIONS} ---")
 
         response = client.messages.create(
-            model="claude-haiku-4-5-20251001",  # Haiku is ~10x cheaper than Sonnet, fine for research
-            max_tokens=1024,
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2048,   # raised from 1024 — the final JSON summary needs more room
             system=system_prompt,
             tools=TOOLS,
             messages=messages
@@ -314,6 +314,26 @@ def run_discoverer(lake_name: str):
         if response.stop_reason == "end_turn":
             print("\n✅ Agent finished.")
             final_text = "".join(b.text for b in response.content if hasattr(b, "text"))
+            save_results(final_text)
+            break
+
+        # max_tokens means the AI ran out of space mid-response.
+        # Append what it wrote so far, then force a clean summary with no tools.
+        elif response.stop_reason == "max_tokens":
+            print("\n⚠️  Hit max_tokens mid-response. Forcing clean summary...")
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({
+                "role": "user",
+                "content": "STOP. No more tool calls. Output the JSON summary now based on everything found so far."
+            })
+            final_response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=2048,
+                system=system_prompt,
+                tools=[],
+                messages=messages
+            )
+            final_text = "".join(b.text for b in final_response.content if hasattr(b, "text"))
             save_results(final_text)
             break
 
