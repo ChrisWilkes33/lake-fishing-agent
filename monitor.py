@@ -572,18 +572,34 @@ def run_monitor(test_mode: bool = False):
             "fingerprint": fp
         })
 
-    # ── Build and send email ──
-    subject, body = build_email(new_reports, lake_name)
-    print(f"\n📧 Sending email: {subject}")
-    print(f"\n{body}")
+    # ── Write results to JSON endpoint ──
+    # Served at wilkeslandia.com/fishing-agent/reports.json
+    # This will be the data source for the future Android app.
+    output = {
+        "lake": lake_name,
+        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "new_reports": new_reports,
+        "report_count": len(new_reports),
+        "status": "new_reports" if new_reports else "nothing_new"
+    }
 
+    WEB_OUTPUT = "/var/www/fishing-agent/reports.json"
     try:
-        send_email(subject, body)
-    except KeyError as e:
-        print(f"❌ Missing email config in .env: {e}")
-        print("Email not sent — check GMAIL_ADDRESS, GMAIL_APP_PASSWORD, ALERT_EMAIL in .env")
+        with open(WEB_OUTPUT, "w") as f:
+            json.dump(output, f, indent=2)
+        print(f"\n✅ Results written to {WEB_OUTPUT}")
+        print(f"   Live at: https://wilkeslandia.com/fishing-agent/reports.json")
     except Exception as e:
-        print(f"❌ Email failed: {e}")
+        print(f"\n❌ Could not write to {WEB_OUTPUT}: {e}")
+
+    # Print human-readable summary to log
+    if new_reports:
+        print(f"\n📋 {len(new_reports)} new report(s) found:")
+        for r in new_reports:
+            print(f"\n  {r['source']} ({r['date_info']})")
+            print(f"  {r['summary']}")
+    else:
+        print("\n📋 No new reports found.")
 
     # ── Update sent reports tracker ──
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -624,11 +640,11 @@ def run_monitor(test_mode: bool = False):
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
-    required_vars = ["ANTHROPIC_API_KEY", "GMAIL_ADDRESS", "GMAIL_APP_PASSWORD", "ALERT_EMAIL"]
+    required_vars = ["ANTHROPIC_API_KEY"]
     missing = [v for v in required_vars if not os.environ.get(v)]
     if missing:
         print(f"❌ Missing environment variables: {', '.join(missing)}")
-        print("   Copy .env.example to .env and fill in your values.")
+        print("   Check your .env file.")
         exit(1)
 
     parser = argparse.ArgumentParser(description="Monitor fishing reports and send email digest")
