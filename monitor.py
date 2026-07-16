@@ -337,7 +337,7 @@ If you found no reports at all, output an empty array: []
 
         response = client.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=1024,
+            max_tokens=4096,   # raised — the JSON summary of 16 sources needs room
             system=system_prompt,
             tools=MONITOR_TOOLS,
             messages=messages
@@ -350,6 +350,25 @@ If you found no reports at all, output an empty array: []
 
         if response.stop_reason == "end_turn":
             final_text = "".join(b.text for b in response.content if hasattr(b, "text"))
+            return parse_reports_json(final_text), total_input_tokens, total_output_tokens
+
+        # max_tokens means the AI ran out of space writing the summary.
+        # Append what it wrote, then force a clean summary with no tools.
+        elif response.stop_reason == "max_tokens":
+            print("\n⚠️  Hit max_tokens — forcing clean summary...")
+            messages.append({"role": "assistant", "content": response.content})
+            messages.append({
+                "role": "user",
+                "content": "STOP. No more tool calls. Output the JSON array now with what you have found."
+            })
+            final_response = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=4096,
+                system=system_prompt,
+                tools=[],
+                messages=messages
+            )
+            final_text = "".join(b.text for b in final_response.content if hasattr(b, "text"))
             return parse_reports_json(final_text), total_input_tokens, total_output_tokens
 
         elif response.stop_reason == "tool_use":
